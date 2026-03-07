@@ -2,6 +2,7 @@
 #include "engine/Core/Time.h"
 #include "engine/Core/Events.h"
 #include "engine/Platform/GlfwWindow.h"
+#include "engine/RHI/Vulkan/VulkanContext.h"
 
 #include <string>
 
@@ -13,6 +14,10 @@ int main()
     EventQueue eventQueue;
     GlfwWindow window;
     if (!window.Create({}, &eventQueue))
+        return 1;
+    
+    EZEngine::RHI::VulkanContext vulkanContext;
+    if (!vulkanContext.Initialize(window))
         return 1;
 
     Log("BOOT demo started: ESC to exit, FPS log every 1 second.", LogType::INFO);
@@ -59,6 +64,7 @@ int main()
         }
     }
 
+    vulkanContext.Shutdown();
     Log("BOOT demo finished.", LogType::INFO);
     return 0;
 }

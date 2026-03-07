@@ -16,10 +16,13 @@ FetchContent_MakeAvailable(glfw)
 add_executable(Sandbox
   src/app/Sandbox.cpp
   src/engine/Platform/GlfwWindow.cpp
+  src/engine/RHI/Vulkan/VulkanContext.cpp
 )
 
+find_package(Vulkan REQUIRED)
+
 target_include_directories(Sandbox PRIVATE src)
-target_link_libraries(Sandbox PRIVATE glfw)
+target_link_libraries(Sandbox PRIVATE glfw Vulkan::Vulkan)
 
 # Windows에서 콘솔 창 안 뜨게 하려면 WIN32 옵션을 쓰지만,
 # 오늘은 로그를 보기 위해 콘솔 유지.

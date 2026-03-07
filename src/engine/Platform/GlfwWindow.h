@@ -28,6 +28,8 @@ namespace EZEngine::Platform
         void PushResizeEvent(int width, int height);
         void PushCloseEvent();
 
+        GLFWwindow* GetGlfwWindow() const { return m_Window; }
+
     private:
         GLFWwindow* m_Window = nullptr;
         EZEngine::Core::EventQueue* m_EventQueue = nullptr;
