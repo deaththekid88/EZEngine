@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <GLFW/glfw3.h>
-using namespace std;
+#include "engine/Core/Events.h"
 
 namespace EZEngine::Platform
 {
@@ -9,7 +9,7 @@ namespace EZEngine::Platform
     {
         int Width = 1280;
         int Height = 720;
-        string Title = "EZEngine";
+        std::string Title = "EZEngine";
     };
 
     class GlfwWindow
@@ -27,5 +27,6 @@ namespace EZEngine::Platform
 
     private:
         GLFWwindow* m_Window = nullptr;
+        EZEngine::Core::EventQueue m_EventQueue;
     };
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <string>
-using namespace std;
+
 namespace EZEngine::Core
 {
     enum LogType
@@ -11,18 +11,18 @@ namespace EZEngine::Core
         ERROR
     };
 
-    inline void Log(const string& message, LogType type = LogType::INFO)
+    inline void Log(const std::string& message, LogType type = LogType::INFO)
     {
         switch (type)
         {
         case LogType::INFO:
-            cout << "[INFO] " << message << "\n" << endl;
+            std::cout << "[INFO] " << message << "\n" << std::endl;
             break;
         case LogType::WARNING:
-            cout << "[WARNING] " << message << "\n" << endl;
+            std::cout << "[WARNING] " << message << "\n" << std::endl;
             break;
         case LogType::ERROR:
-            cout << "[ERROR] " << message << "\n" << endl;
+            std::cout << "[ERROR] " << message << "\n" << std::endl;
             break;
         }
     }
