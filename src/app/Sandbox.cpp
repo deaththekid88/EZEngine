@@ -1,5 +1,6 @@
 #include "engine/Core/Log.h"
 #include "engine/Core/Time.h"
+#include "engine/Core/Events.h"
 #include "engine/Platform/GlfwWindow.h"
 
 #include <string>
@@ -9,8 +10,9 @@ using namespace EZEngine::Platform;
 
 int main()
 {
+    EventQueue eventQueue;
     GlfwWindow window;
-    if (!window.Create({}))
+    if (!window.Create({}, &eventQueue))
         return 1;
 
     Log("BOOT demo started: ESC to exit, FPS log every 1 second.", LogType::INFO);
@@ -21,6 +23,22 @@ int main()
     while (!window.ShouldClose())
     {
         window.PollEvents();
+
+        for(const auto& event : eventQueue.Drain())
+        {
+            std::visit([&](auto&& event)
+            {
+                using T = std::decay_t<decltype(event)>;
+                if constexpr (std::is_same_v<T, WindowResizeEvent>)
+                {
+                    Log("Window resized: " + std::to_string(event.width) + "x" + std::to_string(event.height), LogType::INFO);
+                }
+                else if constexpr (std::is_same_v<T, WindowCloseEvent>)
+                {
+                    Log("Window close requested.", LogType::INFO);
+                }
+            }, event);
+        }
 
         if (window.IsKeyDown(GLFW_KEY_ESCAPE))
             window.RequestClose();

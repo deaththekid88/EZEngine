@@ -18,15 +18,18 @@ namespace EZEngine::Platform
         GlfwWindow() = default;
         ~GlfwWindow();
         
-        bool Create(const WindowDescription& desc);
+        bool Create(const WindowDescription& desc, EZEngine::Core::EventQueue* eventQueue);
         void PollEvents();
         bool ShouldClose() const;
         void RequestClose();
 
         bool IsKeyDown(int key) const; // 조회용
 
+        void PushResizeEvent(int width, int height);
+        void PushCloseEvent();
+
     private:
         GLFWwindow* m_Window = nullptr;
-        EZEngine::Core::EventQueue m_EventQueue;
+        EZEngine::Core::EventQueue* m_EventQueue = nullptr;
     };
 }
