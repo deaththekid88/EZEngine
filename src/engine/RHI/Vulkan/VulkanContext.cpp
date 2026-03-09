@@ -21,6 +21,8 @@ namespace EZEngine::RHI
         (void)pUserData;
 
         if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+            Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::ERROR);
+        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
             Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::WARNING);
         else
             Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::INFO);
