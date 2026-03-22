@@ -252,6 +252,7 @@ namespace EZEngine::RHI
             if (indices.IsComplete())
             {
                 m_physicalDevice = device;
+                m_queueFamilyIndices = indices;
                 
                 VkPhysicalDeviceProperties deviceProperties;
                 vkGetPhysicalDeviceProperties(m_physicalDevice, &deviceProperties);
@@ -293,6 +294,20 @@ namespace EZEngine::RHI
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
 
+          const char* deviceExtensions[] = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        };
+
+        createInfo.enabledExtensionCount = 1;
+        createInfo.ppEnabledExtensionNames = deviceExtensions;
+
+        const char* validationLayers[] = {
+            "VK_LAYER_KHRONOS_validation"
+        };
+
+        createInfo.enabledLayerCount = 1;
+        createInfo.ppEnabledLayerNames = validationLayers;
+
         if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS)
         {
             Log("Failed to create logical device.", LogType::ERROR);
@@ -300,7 +315,6 @@ namespace EZEngine::RHI
         }
 
         vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
-        vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
 
         Log("Logical device created.", LogType::INFO);
         return true;

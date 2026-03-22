@@ -21,6 +21,12 @@ namespace EZEngine::RHI
     public:
         bool Initialize(EZEngine::Platform::GlfwWindow& window);
         void Shutdown();
+
+        VkInstance GetInstance() const { return m_instance; }
+        VkPhysicalDevice GetPhysicalDevice() const { return m_physicalDevice; }
+        VkDevice GetDevice() const { return m_device; }
+        VkSurfaceKHR GetSurface() const { return m_surface; }
+        QueueFamilyIndices GetQueueFamilyIndices() const { return m_queueFamilyIndices; }
     
     private:
         bool CreateInstance();
@@ -42,5 +48,7 @@ namespace EZEngine::RHI
 
         VkQueue m_graphicsQueue = VK_NULL_HANDLE;
         VkQueue m_presentQueue = VK_NULL_HANDLE;
+
+        QueueFamilyIndices m_queueFamilyIndices;
     };
 }
