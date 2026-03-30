@@ -24,7 +24,7 @@ namespace EZEngine::RHI
 
         VkInstance GetInstance() const { return m_instance; }
         VkPhysicalDevice GetPhysicalDevice() const { return m_physicalDevice; }
-        VkDevice GetDevice() const { return m_device; }
+        VkDevice GetDevice() const { return m_logiclalDevice; }
         VkSurfaceKHR GetSurface() const { return m_surface; }
         QueueFamilyIndices GetQueueFamilyIndices() const { return m_queueFamilyIndices; }
     
@@ -44,7 +44,8 @@ namespace EZEngine::RHI
         VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
         VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE; 
-        VkDevice m_device = VK_NULL_HANDLE;
+        std::vector<VkPhysicalDevice> m_physicalDevices;
+        VkDevice m_logiclalDevice = VK_NULL_HANDLE;
 
         VkQueue m_graphicsQueue = VK_NULL_HANDLE;
         VkQueue m_presentQueue = VK_NULL_HANDLE;

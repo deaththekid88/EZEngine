@@ -75,10 +75,10 @@ namespace EZEngine::RHI
 
     void VulkanContext::Shutdown()
     {
-        if(m_device != VK_NULL_HANDLE)
+        if(m_logiclalDevice != VK_NULL_HANDLE)
         {
-            vkDestroyDevice(m_device, nullptr);
-            m_device = VK_NULL_HANDLE;
+            vkDestroyDevice(m_logiclalDevice, nullptr);
+            m_logiclalDevice = VK_NULL_HANDLE;
         }
 
         if(m_surface != VK_NULL_HANDLE)
@@ -189,18 +189,42 @@ namespace EZEngine::RHI
             return false;
         }
 
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+        m_physicalDevices.resize(deviceCount);
+        vkEnumeratePhysicalDevices(m_instance, &deviceCount, m_physicalDevices.data());
 
         Log("Found " + std::to_string(deviceCount) + " physical device(s) with Vulkan support.", LogType::INFO);
 
-        for (auto device : devices)
+        for (auto device : m_physicalDevices)
         {
             VkPhysicalDeviceProperties deviceProperties;
             vkGetPhysicalDeviceProperties(device, &deviceProperties);
             Log(" - " + std::string(deviceProperties.deviceName), LogType::INFO);
         }
         return true;
+    }
+
+    bool VulkanContext::PickPhysicalDevice()
+    {
+        for (const auto& device : m_physicalDevices)
+        {
+            QueueFamilyIndices indices = FindQueueFamilies(device);
+            if (indices.IsComplete())
+            {
+                m_physicalDevice = device;
+                m_queueFamilyIndices = indices;
+                
+                VkPhysicalDeviceProperties deviceProperties;
+                vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+                Log("Selected GPU: " + std::string(deviceProperties.deviceName), LogType::INFO);
+                Log("Graphics Queue Family: " + std::to_string(indices.graphicsFamily.value()), LogType::INFO);
+                Log("Present Queue Family: " + std::to_string(indices.presentFamily.value()), LogType::INFO);
+                return true;
+            }
+        }
+
+        Log("Failed to find a suitable GPU.", LogType::ERROR);
+        return false;
     }
 
     QueueFamilyIndices VulkanContext::FindQueueFamilies(VkPhysicalDevice device)
@@ -233,44 +257,9 @@ namespace EZEngine::RHI
         return indices;
     }
 
-    bool VulkanContext::PickPhysicalDevice()
-    {
-        uint32_t deviceCount = 0;
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
-        if (deviceCount == 0)
-        {
-            Log("Failed to find GPUs with Vulkan support.", LogType::ERROR);
-            return false;
-        }
-
-        std::vector<VkPhysicalDevice> devices(deviceCount);
-        vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
-
-        for (const auto& device : devices)
-        {
-            QueueFamilyIndices indices = FindQueueFamilies(device);
-            if (indices.IsComplete())
-            {
-                m_physicalDevice = device;
-                m_queueFamilyIndices = indices;
-                
-                VkPhysicalDeviceProperties deviceProperties;
-                vkGetPhysicalDeviceProperties(m_physicalDevice, &deviceProperties);
-
-                Log("Selected GPU: " + std::string(deviceProperties.deviceName), LogType::INFO);
-                Log("Graphics Queue Family: " + std::to_string(indices.graphicsFamily.value()), LogType::INFO);
-                Log("Present Queue Family: " + std::to_string(indices.presentFamily.value()), LogType::INFO);
-                return true;
-            }
-        }
-
-        Log("Failed to find a suitable GPU.", LogType::ERROR);
-        return false;
-    }
-
     bool VulkanContext::CreateLogicalDevice()
     {
-        QueueFamilyIndices indices = FindQueueFamilies(m_physicalDevice);
+        const QueueFamilyIndices& indices = m_queueFamilyIndices;
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
@@ -294,7 +283,7 @@ namespace EZEngine::RHI
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
 
-          const char* deviceExtensions[] = {
+        const char* deviceExtensions[] = {
             VK_KHR_SWAPCHAIN_EXTENSION_NAME
         };
 
@@ -308,13 +297,14 @@ namespace EZEngine::RHI
         createInfo.enabledLayerCount = 1;
         createInfo.ppEnabledLayerNames = validationLayers;
 
-        if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS)
+        if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_logiclalDevice) != VK_SUCCESS)
         {
             Log("Failed to create logical device.", LogType::ERROR);
             return false;
         }
 
-        vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+        vkGetDeviceQueue(m_logiclalDevice, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+        vkGetDeviceQueue(m_logiclalDevice, indices.presentFamily.value(), 0, &m_presentQueue);
 
         Log("Logical device created.", LogType::INFO);
         return true;
