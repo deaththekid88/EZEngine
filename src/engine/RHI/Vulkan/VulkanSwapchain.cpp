@@ -19,6 +19,9 @@ namespace EZEngine::RHI
 
         if (!GetSwapchainImages())
             return false;
+        
+        if (!CreateImageViews())
+            return false;
 
         Log("Swapchain created successfully.", LogType::INFO);
         return true;
@@ -26,6 +29,15 @@ namespace EZEngine::RHI
 
     void VulkanSwapchain::Shutdown()
     {
+        for (auto imageView : m_ImageViews)
+        {
+            if (imageView != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(m_Device, imageView, nullptr);
+            }
+        }
+        m_ImageViews.clear();
+
         if (m_Swapchain != VK_NULL_HANDLE)
         {
             vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
@@ -141,6 +153,40 @@ namespace EZEngine::RHI
         Log("Swapchain extent: " + std::to_string(m_Extent.width) + "x" + std::to_string(m_Extent.height), LogType::INFO);
         Log("Swapchain format selected.", LogType::INFO);
 
+        return true;
+    }
+    
+    bool VulkanSwapchain::CreateImageViews()
+    {
+        m_ImageViews.resize(m_Images.size());
+
+        for (size_t i = 0; i < m_Images.size(); i++)
+        {
+            VkImageViewCreateInfo createInfo{};
+            createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            createInfo.image = m_Images[i];
+            createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            createInfo.format = m_ImageFormat;
+
+            createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+            createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            createInfo.subresourceRange.baseMipLevel = 0;
+            createInfo.subresourceRange.levelCount = 1;
+            createInfo.subresourceRange.baseArrayLayer = 0;
+            createInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(m_Device, &createInfo, nullptr, &m_ImageViews[i]) != VK_SUCCESS)
+            {
+                Log("Failed to create image view for swapchain image " + std::to_string(i), LogType::ERROR);
+                return false;
+            }
+        }
+
+        Log("Swapchain image views created: " + std::to_string(m_ImageViews.size()), LogType::INFO);
         return true;
     }
 }

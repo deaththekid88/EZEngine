@@ -20,10 +20,12 @@ namespace EZEngine::RHI
     private:
         bool CreateSwapchain(VulkanContext& context, EZEngine::Platform::GlfwWindow& window);
         bool GetSwapchainImages();
+        bool CreateImageViews();
 
     private:
         VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;
         std::vector<VkImage> m_Images;
+        std::vector<VkImageView> m_ImageViews;
 
         VkFormat m_ImageFormat = VK_FORMAT_UNDEFINED;
         VkExtent2D m_Extent{};
