@@ -18,6 +18,7 @@ add_executable(Sandbox
   src/engine/Platform/GlfwWindow.cpp
   src/engine/RHI/Vulkan/VulkanContext.cpp
   src/engine/RHI/Vulkan/VulkanSwapchain.cpp
+  src/engine/RHI/Vulkan/VulkanRenderer.cpp
 )
 
 find_package(Vulkan REQUIRED)

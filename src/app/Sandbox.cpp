@@ -4,6 +4,7 @@
 #include "engine/Platform/GlfwWindow.h"
 #include "engine/RHI/Vulkan/VulkanContext.h"
 #include "engine/RHI/Vulkan/VulkanSwapchain.h"
+#include "engine/RHI/Vulkan/VulkanRenderer.h"
 
 #include <string>
 
@@ -23,6 +24,10 @@ int main()
 
     EZEngine::RHI::VulkanSwapchain swapchain;
     if (!swapchain.Initialize(vulkanContext, window))
+        return 1;
+    
+    EZEngine::RHI::VulkanRenderer renderer;
+    if (!renderer.Initialize(vulkanContext))
         return 1;
 
     Log("BOOT demo started: ESC to exit, FPS log every 1 second.", LogType::INFO);
@@ -69,6 +74,7 @@ int main()
         }
     }
 
+    renderer.Shutdown();
     swapchain.Shutdown();
     vulkanContext.Shutdown();
     Log("BOOT demo finished.", LogType::INFO);
