@@ -38,7 +38,7 @@ int main()
     while (!window.ShouldClose())
     {
         window.PollEvents();
-        renderer.RenderFrame();
+        renderer.RenderFrame(window);
 
         for(const auto& event : eventQueue.Drain())
         {

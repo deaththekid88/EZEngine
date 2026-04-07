@@ -16,7 +16,7 @@ namespace EZEngine::Platform
         auto* glfwWindow = static_cast<GlfwWindow*>(glfwGetWindowUserPointer(window));
         if (!glfwWindow)
             return;
-        
+
         glfwWindow->PushResizeEvent(width, height);
     }
 
@@ -96,6 +96,7 @@ namespace EZEngine::Platform
         if(!m_EventQueue)
             return;
         m_EventQueue->Push(WindowResizeEvent{ width, height });
+        m_FramebufferResized = true;
     }
 
     void GlfwWindow::PushCloseEvent()

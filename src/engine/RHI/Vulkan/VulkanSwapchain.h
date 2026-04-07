@@ -20,11 +20,13 @@ namespace EZEngine::RHI
         const std::vector<VkImage>& GetImages() const { return m_Images; }
         VkExtent2D GetExtent() const { return m_Extent; }
         VkFormat GetImageFormat() const { return m_ImageFormat; }
+        bool RecreateSwapchain(VulkanContext& context, EZEngine::Platform::GlfwWindow& window);
 
     private:
         bool CreateSwapchain(VulkanContext& context, EZEngine::Platform::GlfwWindow& window);
         bool GetSwapchainImages();
         bool CreateImageViews();
+        bool Cleanup();
 
     private:
         VkSwapchainKHR m_Swapchain = VK_NULL_HANDLE;

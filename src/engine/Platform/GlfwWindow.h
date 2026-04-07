@@ -30,8 +30,12 @@ namespace EZEngine::Platform
 
         GLFWwindow* GetGlfwWindow() const { return m_Window; }
 
+        bool WasResized() const { return m_FramebufferResized; }
+        void ResetResized() { m_FramebufferResized = false; }
+
     private:
         GLFWwindow* m_Window = nullptr;
         EZEngine::Core::EventQueue* m_EventQueue = nullptr;
+        bool m_FramebufferResized = false;
     };
 }

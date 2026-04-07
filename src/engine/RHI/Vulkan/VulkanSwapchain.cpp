@@ -189,4 +189,42 @@ namespace EZEngine::RHI
         Log("Swapchain image views created: " + std::to_string(m_ImageViews.size()), LogType::INFO);
         return true;
     }
+
+    bool VulkanSwapchain::Cleanup()
+    {
+        for (auto imageView : m_ImageViews)
+        {
+            if (imageView != VK_NULL_HANDLE)
+            {
+                vkDestroyImageView(m_Device, imageView, nullptr);
+            }
+        }
+        m_ImageViews.clear();
+
+        if (m_Swapchain != VK_NULL_HANDLE)
+        {
+            vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
+            m_Swapchain = VK_NULL_HANDLE;
+        }
+
+        return true;
+    }
+
+    bool VulkanSwapchain::RecreateSwapchain(VulkanContext& context, GlfwWindow& window)
+    {
+        if (!Cleanup())
+            return false;
+
+        if (!CreateSwapchain(context, window))
+            return false;
+
+        if (!GetSwapchainImages())
+            return false;
+        
+        if (!CreateImageViews())
+            return false;
+
+        Log("Swapchain recreated successfully.", LogType::INFO);
+        return true;
+    }
 }

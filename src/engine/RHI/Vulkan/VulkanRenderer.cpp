@@ -1,5 +1,6 @@
 #include "engine/RHI/Vulkan/VulkanRenderer.h"
 #include "engine/RHI/Vulkan/VulkanContext.h"
+#include "engine/Platform/GlfwWindow.h"
 #include "engine/Core/Log.h"
 
 using namespace EZEngine::Core;
@@ -74,8 +75,14 @@ namespace EZEngine::RHI
         return true;
     }
     
-    void VulkanRenderer::RenderFrame()
+    void VulkanRenderer::RenderFrame(EZEngine::Platform::GlfwWindow& window)
     {
+        if(window.WasResized())
+        {
+            window.ResetResized();
+            RecreateSwapchain(window);
+            return;
+        }
         VkQueue graphicsQueue = m_Context.GetGraphicsQueue();
         VkQueue presentQueue = m_Context.GetPresentQueue();
         VkSwapchainKHR swapchain = m_Swapchain.GetSwapchain();
@@ -90,6 +97,11 @@ namespace EZEngine::RHI
             VK_NULL_HANDLE,
             &imageIndex);
         
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            RecreateSwapchain(window);
+            return;
+        }
         if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         {
             throw std::runtime_error("Failed to acquire next swapchain image!");
@@ -117,6 +129,11 @@ namespace EZEngine::RHI
         presentInfo.pImageIndices = &imageIndex;
 
         result = vkQueuePresentKHR(presentQueue, &presentInfo);
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            RecreateSwapchain(window);
+            return;
+        }
         if (result != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to present swapchain image!");
@@ -239,5 +256,17 @@ namespace EZEngine::RHI
             0, nullptr,
             0, nullptr,
             1, &barrier);
+    }
+
+    void VulkanRenderer::RecreateSwapchain(EZEngine::Platform::GlfwWindow& window)
+    {
+        vkDeviceWaitIdle(m_Device);
+
+        if (!m_Swapchain.RecreateSwapchain(m_Context, window))
+        {
+            throw std::runtime_error("Failed to recreate swapchain!");
+        }
+
+        Log("Swapchain recreated.", LogType::INFO);
     }
 }
