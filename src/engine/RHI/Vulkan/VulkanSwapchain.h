@@ -16,6 +16,10 @@ namespace EZEngine::RHI
     public:
         bool Initialize(VulkanContext& context, EZEngine::Platform::GlfwWindow& window);
         void Shutdown();
+        VkSwapchainKHR GetSwapchain() const { return m_Swapchain; }
+        const std::vector<VkImage>& GetImages() const { return m_Images; }
+        VkExtent2D GetExtent() const { return m_Extent; }
+        VkFormat GetImageFormat() const { return m_ImageFormat; }
 
     private:
         bool CreateSwapchain(VulkanContext& context, EZEngine::Platform::GlfwWindow& window);

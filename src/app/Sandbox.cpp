@@ -26,8 +26,8 @@ int main()
     if (!swapchain.Initialize(vulkanContext, window))
         return 1;
     
-    EZEngine::RHI::VulkanRenderer renderer;
-    if (!renderer.Initialize(vulkanContext))
+    EZEngine::RHI::VulkanRenderer renderer(vulkanContext, swapchain);
+    if (!renderer.Initialize())
         return 1;
 
     Log("BOOT demo started: ESC to exit, FPS log every 1 second.", LogType::INFO);
@@ -38,6 +38,7 @@ int main()
     while (!window.ShouldClose())
     {
         window.PollEvents();
+        renderer.RenderFrame();
 
         for(const auto& event : eventQueue.Drain())
         {
@@ -73,7 +74,7 @@ int main()
             frames = 0;
         }
     }
-
+    vkDeviceWaitIdle(vulkanContext.GetDevice());
     renderer.Shutdown();
     swapchain.Shutdown();
     vulkanContext.Shutdown();

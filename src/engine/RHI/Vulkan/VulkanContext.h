@@ -27,6 +27,8 @@ namespace EZEngine::RHI
         VkDevice GetDevice() const { return m_logiclalDevice; }
         VkSurfaceKHR GetSurface() const { return m_surface; }
         QueueFamilyIndices GetQueueFamilyIndices() const { return m_queueFamilyIndices; }
+        VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
+        VkQueue GetPresentQueue() const { return m_presentQueue; }
     
     private:
         bool CreateInstance();
