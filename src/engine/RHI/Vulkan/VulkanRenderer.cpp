@@ -7,7 +7,7 @@ using namespace EZEngine::Core;
 
 namespace EZEngine::RHI
 {
-    VulkanRenderer::VulkanRenderer(VulkanContext& context, VulkanSwapchain& swapchain)
+    VulkanRenderer::VulkanRenderer(VulkanContext &context, VulkanSwapchain &swapchain)
         : m_Context(context), m_Swapchain(swapchain)
     {
     }
@@ -18,11 +18,15 @@ namespace EZEngine::RHI
     bool VulkanRenderer::Initialize()
     {
         m_Device = m_Context.GetDevice();
+        MAX_FRAMES_IN_FLIGHT = static_cast<uint32_t>(m_Swapchain.GetImages().size());
 
         if (!CreateCommandPool())
             return false;
 
         if (!AllocateCommandBuffer())
+            return false;
+
+        if (!CreateSyncObjects())
             return false;
 
         Log("Vulkan renderer initialized.", LogType::INFO);
@@ -31,6 +35,16 @@ namespace EZEngine::RHI
 
     void VulkanRenderer::Shutdown()
     {
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            if (m_ImageAvailableSemaphores[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_Device, m_ImageAvailableSemaphores[i], nullptr);
+            if (m_RenderFinishedSemaphores[i] != VK_NULL_HANDLE)
+                vkDestroySemaphore(m_Device, m_RenderFinishedSemaphores[i], nullptr);
+            if (m_InFlightFences[i] != VK_NULL_HANDLE)
+                vkDestroyFence(m_Device, m_InFlightFences[i], nullptr);
+        }
+
         if (m_CommandPool != VK_NULL_HANDLE)
         {
             vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
@@ -59,13 +73,15 @@ namespace EZEngine::RHI
 
     bool VulkanRenderer::AllocateCommandBuffer()
     {
+        m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = m_CommandPool;
         allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = 1;
+        allocInfo.commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size());
 
-        if (vkAllocateCommandBuffers(m_Device, &allocInfo, &m_CommandBuffer) != VK_SUCCESS)
+        if (vkAllocateCommandBuffers(m_Device, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS)
         {
             Log("Failed to allocate command buffer.", LogType::ERROR);
             return false;
@@ -74,18 +90,27 @@ namespace EZEngine::RHI
         Log("Command buffer allocated.", LogType::INFO);
         return true;
     }
-    
-    void VulkanRenderer::RenderFrame(EZEngine::Platform::GlfwWindow& window)
+
+    void VulkanRenderer::RenderFrame(EZEngine::Platform::GlfwWindow &window)
     {
-        if(window.WasResized())
+        if (window.WasResized())
         {
             window.ResetResized();
             RecreateSwapchain(window);
             return;
         }
+
         VkQueue graphicsQueue = m_Context.GetGraphicsQueue();
         VkQueue presentQueue = m_Context.GetPresentQueue();
         VkSwapchainKHR swapchain = m_Swapchain.GetSwapchain();
+
+        VkFence inFlightFence = m_InFlightFences[m_CurrentFrame];
+        VkSemaphore ImageAvailableSemaphore = m_ImageAvailableSemaphores[m_CurrentFrame];
+        VkSemaphore RenderFinishedSemaphore = m_RenderFinishedSemaphores[m_CurrentFrame];
+        VkCommandBuffer commandBuffer = m_CommandBuffers[m_CurrentFrame];
+
+        vkWaitForFences(m_Device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+        vkResetFences(m_Device, 1, &inFlightFence);
 
         uint32_t imageIndex = 0;
 
@@ -93,10 +118,10 @@ namespace EZEngine::RHI
             m_Device,
             swapchain,
             UINT64_MAX,
-            VK_NULL_HANDLE,
+            ImageAvailableSemaphore,
             VK_NULL_HANDLE,
             &imageIndex);
-        
+
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
             RecreateSwapchain(window);
@@ -107,25 +132,34 @@ namespace EZEngine::RHI
             throw std::runtime_error("Failed to acquire next swapchain image!");
         }
 
-        RecordCommandBuffer(imageIndex);
+        RecordCommandBuffer(commandBuffer, imageIndex);
+
+        VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_TRANSFER_BIT};
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &ImageAvailableSemaphore;
+        submitInfo.pWaitDstStageMask = waitStages;
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &RenderFinishedSemaphore;
         submitInfo.commandBufferCount = 1;
-        submitInfo.pCommandBuffers = &m_CommandBuffer;
+        submitInfo.pCommandBuffers = &commandBuffer;
 
-        result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+        result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence);
         if (result != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to submit draw command buffer!");
         }
 
-        vkQueueWaitIdle(graphicsQueue);
+        VkSwapchainKHR swapchains[] = {swapchain};
 
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        presentInfo.waitSemaphoreCount = 1;
+        presentInfo.pWaitSemaphores = &RenderFinishedSemaphore;
         presentInfo.swapchainCount = 1;
-        presentInfo.pSwapchains = &swapchain;
+        presentInfo.pSwapchains = swapchains;
         presentInfo.pImageIndices = &imageIndex;
 
         result = vkQueuePresentKHR(presentQueue, &presentInfo);
@@ -139,32 +173,32 @@ namespace EZEngine::RHI
             throw std::runtime_error("Failed to present swapchain image!");
         }
 
-        vkQueueWaitIdle(presentQueue);
+        m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    void VulkanRenderer::RecordCommandBuffer(uint32_t imageIndex)
+    void VulkanRenderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     {
         VkExtent2D extent = m_Swapchain.GetExtent();
         VkImage image = m_Swapchain.GetImages()[imageIndex];
 
-        vkResetCommandBuffer(m_CommandBuffer, 0);
+        vkResetCommandBuffer(commandBuffer, 0);
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
-        VkResult result = vkBeginCommandBuffer(m_CommandBuffer, &beginInfo);
+        VkResult result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
         if (result != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to begin command buffer!");
         }
 
         TransitionImageLayout(
-            m_CommandBuffer,
+            commandBuffer,
             image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        VkClearColorValue clearColor = { { 0.1f, 0.1f, 0.3f, 1.0f } };
+        VkClearColorValue clearColor = {{0.1f, 0.1f, 0.3f, 1.0f}};
 
         VkImageSubresourceRange range{};
         range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -174,7 +208,7 @@ namespace EZEngine::RHI
         range.layerCount = 1;
 
         vkCmdClearColorImage(
-            m_CommandBuffer,
+            commandBuffer,
             image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             &clearColor,
@@ -182,12 +216,12 @@ namespace EZEngine::RHI
             &range);
 
         TransitionImageLayout(
-            m_CommandBuffer,
+            commandBuffer,
             image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-        result = vkEndCommandBuffer(m_CommandBuffer);
+        result = vkEndCommandBuffer(commandBuffer);
         if (result != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to end command buffer!");
@@ -226,7 +260,7 @@ namespace EZEngine::RHI
             dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         }
         else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-                newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                 newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
         {
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             barrier.dstAccessMask = 0;
@@ -235,7 +269,7 @@ namespace EZEngine::RHI
             dstStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         }
         else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-            newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+                 newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
         {
             barrier.srcAccessMask = 0;
             barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -258,7 +292,7 @@ namespace EZEngine::RHI
             1, &barrier);
     }
 
-    void VulkanRenderer::RecreateSwapchain(EZEngine::Platform::GlfwWindow& window)
+    void VulkanRenderer::RecreateSwapchain(EZEngine::Platform::GlfwWindow &window)
     {
         vkDeviceWaitIdle(m_Device);
 
@@ -268,5 +302,33 @@ namespace EZEngine::RHI
         }
 
         Log("Swapchain recreated.", LogType::INFO);
+    }
+
+    bool VulkanRenderer::CreateSyncObjects()
+    {
+        m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+        m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            if (vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(m_Device, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(m_Device, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+            {
+                Log("Failed to create sync objects.", LogType::ERROR);
+                return false;
+            }
+        }
+
+        Log("Sync objects created.", LogType::INFO);
+        return true;
     }
 }
