@@ -28,6 +28,7 @@ namespace EZEngine::RHI
         bool CreateCommandPool();
         bool AllocateCommandBuffer();
         bool CreateSyncObjects();
+        bool CreateRenderPass();
 
         void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
         void TransitionImageLayout(
@@ -43,6 +44,7 @@ namespace EZEngine::RHI
 
         VkDevice m_Device = VK_NULL_HANDLE;
         VkCommandPool m_CommandPool = VK_NULL_HANDLE;
+        VkRenderPass m_RenderPass = VK_NULL_HANDLE;
 
         std::vector<VkCommandBuffer> m_CommandBuffers;
         std::vector<VkSemaphore> m_ImageAvailableSemaphores;
