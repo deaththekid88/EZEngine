@@ -4,13 +4,17 @@
 #include "engine/Core/Log.h"
 
 #include <vector>
+#include <set>
 
 using namespace EZEngine::Core;
 using namespace EZEngine::Platform;
 
 namespace EZEngine::RHI
 {
-    bool VulkanSwapchain::Initialize(VulkanContext& context, GlfwWindow& window)
+    const std::vector<const char *> deviceExtensions = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+    bool VulkanSwapchain::Initialize(VulkanContext &context, GlfwWindow &window)
     {
         m_Device = context.GetDevice();
 
@@ -19,7 +23,7 @@ namespace EZEngine::RHI
 
         if (!GetSwapchainImages())
             return false;
-        
+
         if (!CreateImageViews())
             return false;
 
@@ -57,54 +61,123 @@ namespace EZEngine::RHI
         return true;
     }
 
-    bool VulkanSwapchain::CreateSwapchain(VulkanContext& context, GlfwWindow& window)
+    bool CheckDeviceExtensionSupport(VkPhysicalDevice device)
+    {
+        uint32_t extensionCount;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+        std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+        std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+        for (const auto &extension : availableExtensions)
+        {
+            requiredExtensions.erase(extension.extensionName);
+        }
+
+        return requiredExtensions.empty();
+    }
+
+    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
+    {
+        SwapChainSupportDetails swapChainSupport;
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &swapChainSupport.capabilities);
+
+        uint32_t formatCount;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+        if (formatCount != 0)
+        {
+            swapChainSupport.formats.resize(formatCount);
+            vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, swapChainSupport.formats.data());
+        }
+
+        uint32_t presentModeCount;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+        if (presentModeCount != 0)
+        {
+            swapChainSupport.presentModes.resize(presentModeCount);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, swapChainSupport.presentModes.data());
+        }
+
+        return swapChainSupport;
+    }
+
+    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats)
+    {
+        for (const auto &availableFormat : availableFormats)
+        {
+            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+                availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+                return availableFormat;
+            }
+        }
+
+        return availableFormats[0];
+    }
+
+    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes)
+    {
+        for (const auto &availablePresentMode : availablePresentModes)
+        {
+            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+            {
+                return availablePresentMode;
+            }
+        }
+
+        return VK_PRESENT_MODE_FIFO_KHR;
+    }
+
+    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities, GlfwWindow &window)
+    {
+        if (capabilities.currentExtent.width != UINT32_MAX)
+        {
+            return capabilities.currentExtent;
+        }
+        else
+        {
+            int width, height;
+            glfwGetFramebufferSize(window.GetGlfwWindow(), &width, &height);
+
+            VkExtent2D actualExtent = {
+                static_cast<uint32_t>(width),
+                static_cast<uint32_t>(height)};
+
+            actualExtent.width = std::max(capabilities.minImageExtent.width, std::min(capabilities.maxImageExtent.width, actualExtent.width));
+            actualExtent.height = std::max(capabilities.minImageExtent.height, std::min(capabilities.maxImageExtent.height, actualExtent.height));
+
+            return actualExtent;
+        }
+    }
+
+    bool VulkanSwapchain::CreateSwapchain(VulkanContext &context, GlfwWindow &window)
     {
         VkPhysicalDevice physicalDevice = context.GetPhysicalDevice();
         VkSurfaceKHR surface = context.GetSurface();
         QueueFamilyIndices indices = context.GetQueueFamilyIndices();
 
-        VkSurfaceCapabilitiesKHR capabilities{};
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
-
-        uint32_t formatCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
-
-        std::vector<VkSurfaceFormatKHR> formats(formatCount);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data());
-
-        uint32_t presentModeCount = 0;
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
-
-        std::vector<VkPresentModeKHR> presentModes(presentModeCount);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
-
-        VkSurfaceFormatKHR chosenFormat = formats[0];
-        for (const auto& format : formats)
+        bool extensionsSupported = CheckDeviceExtensionSupport(physicalDevice);
+        if (!extensionsSupported)
         {
-            if (format.format == VK_FORMAT_B8G8R8A8_SRGB &&
-                format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            {
-                chosenFormat = format;
-                break;
-            }
+            Log("Device does not support required swapchain extensions.", LogType::ERROR);
+            return false;
         }
 
-        VkPresentModeKHR chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-        for (const auto& mode : presentModes)
+        SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(physicalDevice, surface);
+        if (swapChainSupport.formats.empty() || swapChainSupport.presentModes.empty())
         {
-            if (mode == VK_PRESENT_MODE_MAILBOX_KHR)
-            {
-                chosenPresentMode = mode;
-                break;
-            }
+            Log("Device does not support required swapchain formats or present modes.", LogType::ERROR);
+            return false;
         }
 
-        VkExtent2D extent = capabilities.currentExtent;
+        VkSurfaceFormatKHR chosenFormat = ChooseSwapSurfaceFormat(swapChainSupport.formats);
+        VkPresentModeKHR chosenPresentMode = ChooseSwapPresentMode(swapChainSupport.presentModes);
+        VkExtent2D extent = ChooseSwapExtent(swapChainSupport.capabilities, window);
 
-        uint32_t imageCount = capabilities.minImageCount + 1;
-        if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
+        uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+        if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount)
         {
-            imageCount = capabilities.maxImageCount;
+            imageCount = swapChainSupport.capabilities.maxImageCount;
         }
 
         VkSwapchainCreateInfoKHR createInfo{};
@@ -119,8 +192,7 @@ namespace EZEngine::RHI
 
         uint32_t queueFamilyIndices[] = {
             indices.graphicsFamily.value(),
-            indices.presentFamily.value()
-        };
+            indices.presentFamily.value()};
 
         if (indices.graphicsFamily != indices.presentFamily)
         {
@@ -135,7 +207,7 @@ namespace EZEngine::RHI
             createInfo.pQueueFamilyIndices = nullptr;
         }
 
-        createInfo.preTransform = capabilities.currentTransform;
+        createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
         createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         createInfo.presentMode = chosenPresentMode;
         createInfo.clipped = VK_TRUE;
@@ -155,7 +227,7 @@ namespace EZEngine::RHI
 
         return true;
     }
-    
+
     bool VulkanSwapchain::CreateImageViews()
     {
         m_ImageViews.resize(m_Images.size());
@@ -210,7 +282,7 @@ namespace EZEngine::RHI
         return true;
     }
 
-    bool VulkanSwapchain::RecreateSwapchain(VulkanContext& context, GlfwWindow& window)
+    bool VulkanSwapchain::RecreateSwapchain(VulkanContext &context, GlfwWindow &window)
     {
         if (!Cleanup())
             return false;
@@ -220,7 +292,7 @@ namespace EZEngine::RHI
 
         if (!GetSwapchainImages())
             return false;
-        
+
         if (!CreateImageViews())
             return false;
 
