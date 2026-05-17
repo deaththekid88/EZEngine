@@ -12,30 +12,36 @@ using namespace EZEngine::Platform;
 
 namespace EZEngine::RHI
 {
+#ifdef NDEBUG
+    const bool enableValidationLayers = false;
+#else
+    const bool enableValidationLayers = true;
+#endif
+
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(
         VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
         VkDebugUtilsMessageTypeFlagsEXT messageType,
-        const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-        void* pUserData)
+        const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+        void *pUserData)
     {
         (void)messageType;
         (void)pUserData;
 
-        if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+        if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
             Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::ERROR);
-        else if(messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+        else if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
             Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::WARNING);
         else
             Log("[Vulkan] " + std::string(pCallbackData->pMessage), LogType::INFO);
 
         return VK_FALSE;
-    }  
+    }
 
     static VkResult CreateDebugUtilsMessengerEXT(
-        VkInstance instance, 
-        const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, 
-        const VkAllocationCallbacks* pAllocator, 
-        VkDebugUtilsMessengerEXT* pDebugMessenger)
+        VkInstance instance,
+        const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+        const VkAllocationCallbacks *pAllocator,
+        VkDebugUtilsMessengerEXT *pDebugMessenger)
     {
         auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
         if (func)
@@ -45,21 +51,22 @@ namespace EZEngine::RHI
     }
 
     static void DestroyDebugUtilsMessengerEXT(
-        VkInstance instance, 
-        VkDebugUtilsMessengerEXT debugMessenger, 
-        const VkAllocationCallbacks* pAllocator)
+        VkInstance instance,
+        VkDebugUtilsMessengerEXT debugMessenger,
+        const VkAllocationCallbacks *pAllocator)
     {
         auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
         if (func)
             func(instance, debugMessenger, pAllocator);
     }
-      
-    bool VulkanContext::Initialize(GlfwWindow& window)
+
+    bool VulkanContext::Initialize(GlfwWindow &window)
     {
         if (!CreateInstance())
             return false;
         if (!SetupDebugMessenger())
             return false;
+        // Surface는 물리 디바이스 선택 전에 만들어야 함 (physical device가 surface 지원하는지 체크해야 하므로)
         if (!CreateSurface(window))
             return false;
         if (!EnumeratePhysicalDevices())
@@ -75,32 +82,32 @@ namespace EZEngine::RHI
 
     void VulkanContext::Shutdown()
     {
-        if(m_logiclalDevice != VK_NULL_HANDLE)
+        if (m_logiclalDevice != VK_NULL_HANDLE)
         {
             vkDestroyDevice(m_logiclalDevice, nullptr);
             m_logiclalDevice = VK_NULL_HANDLE;
         }
 
-        if(m_surface != VK_NULL_HANDLE)
+        if (m_surface != VK_NULL_HANDLE)
         {
             vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
             m_surface = VK_NULL_HANDLE;
         }
 
-        if(m_debugMessenger != VK_NULL_HANDLE)
+        if (m_debugMessenger != VK_NULL_HANDLE)
         {
             DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
             m_debugMessenger = VK_NULL_HANDLE;
         }
 
-        if(m_instance != VK_NULL_HANDLE)
+        if (m_instance != VK_NULL_HANDLE)
         {
             vkDestroyInstance(m_instance, nullptr);
             m_instance = VK_NULL_HANDLE;
         }
-        
+
         Log("Vulkan context shut down.", LogType::INFO);
-    }   
+    }
 
     bool VulkanContext::CreateInstance()
     {
@@ -113,25 +120,44 @@ namespace EZEngine::RHI
         appInfo.apiVersion = VK_API_VERSION_1_0;
 
         uint32_t glfwExtensionCount = 0;
-        const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+        const char **glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-        std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-        const char* validationLayers[] = {
-            "VK_LAYER_KHRONOS_validation"
-        };
+        if (enableValidationLayers)
+        {
+            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
+
+        const std::vector<const char *> validationLayers = {
+            "VK_LAYER_KHRONOS_validation"};
+
+        if (enableValidationLayers && !checkValidationLayerSupport(validationLayers))
+        {
+            Log("Validation layers requested, but not available!", LogType::ERROR);
+            return false;
+        }
 
         VkInstanceCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
         createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         createInfo.ppEnabledExtensionNames = extensions.data();
-        createInfo.enabledLayerCount = 1;
-        createInfo.ppEnabledLayerNames = validationLayers;
+        // 유효성 검사 레이어는 디버그 모드에서만 활성화
+        if (enableValidationLayers)
+        {
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+        }
+        else
+        {
+            createInfo.enabledLayerCount = 0;
+            createInfo.ppEnabledLayerNames = nullptr;
+        }
 
         VkResult result = vkCreateInstance(&createInfo, nullptr, &m_instance);
-        if (result != VK_SUCCESS)        {
+        if (result != VK_SUCCESS)
+        {
             Log("Failed to create Vulkan instance: " + std::to_string(result), LogType::ERROR);
             return false;
         }
@@ -140,15 +166,47 @@ namespace EZEngine::RHI
         return true;
     }
 
+    bool checkValidationLayerSupport(const std::vector<const char *> &validationLayers)
+    {
+        uint32_t layerCount = 0;
+        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+        std::vector<VkLayerProperties> availableLayers(layerCount);
+        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+        for (const char *layerName : validationLayers)
+        {
+            bool layerFound = false;
+            for (const auto &layerProperties : availableLayers)
+            {
+                if (strcmp(layerName, layerProperties.layerName) == 0)
+                {
+                    layerFound = true;
+                    break;
+                }
+            }
+
+            if (false == layerFound)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     bool VulkanContext::SetupDebugMessenger()
     {
+        if (!enableValidationLayers)
+            return true;
+
         VkDebugUtilsMessengerCreateInfoEXT createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
-                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | 
+        createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+        createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         createInfo.pfnUserCallback = DebugCallback;
 
@@ -162,18 +220,18 @@ namespace EZEngine::RHI
         return true;
     }
 
-    bool VulkanContext::CreateSurface(GlfwWindow& window)
+    bool VulkanContext::CreateSurface(GlfwWindow &window)
     {
         VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-        GLFWwindow* glfwWindow = window.GetGlfwWindow();
+        GLFWwindow *glfwWindow = window.GetGlfwWindow();
         VkResult result = glfwCreateWindowSurface(m_instance, glfwWindow, nullptr, &surface);
         if (result != VK_SUCCESS)
         {
             Log("Failed to create window surface.", LogType::ERROR);
             return false;
         }
-        
+
         m_surface = surface;
         Log("Window surface created.", LogType::INFO);
         return true;
@@ -205,14 +263,14 @@ namespace EZEngine::RHI
 
     bool VulkanContext::PickPhysicalDevice()
     {
-        for (const auto& device : m_physicalDevices)
+        for (const auto &device : m_physicalDevices)
         {
             QueueFamilyIndices indices = FindQueueFamilies(device);
             if (indices.IsComplete())
             {
                 m_physicalDevice = device;
                 m_queueFamilyIndices = indices;
-                
+
                 VkPhysicalDeviceProperties deviceProperties;
                 vkGetPhysicalDeviceProperties(device, &deviceProperties);
 
@@ -238,18 +296,18 @@ namespace EZEngine::RHI
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
         int i = 0;
-        for(const auto& queueFamily : queueFamilies)
+        for (const auto &queueFamily : queueFamilies)
         {
-            if(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                 indices.graphicsFamily = i;
 
             VkBool32 presentSupport = false;
             vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
-            
-            if(presentSupport)
+
+            if (presentSupport)
                 indices.presentFamily = i;
 
-            if(indices.IsComplete())
+            if (indices.IsComplete())
                 break;
 
             i++;
@@ -259,12 +317,12 @@ namespace EZEngine::RHI
 
     bool VulkanContext::CreateLogicalDevice()
     {
-        const QueueFamilyIndices& indices = m_queueFamilyIndices;
+        const QueueFamilyIndices &indices = m_queueFamilyIndices;
 
         std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
         std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
-        float queuePriority = 1.0f;
+        float queuePriority = 1.0f; // 명령 버퍼 스케줄링 우선순위 (0.0 ~ 1.0)
         for (uint32_t queueFamily : uniqueQueueFamilies)
         {
             VkDeviceQueueCreateInfo queueCreateInfo{};
@@ -283,16 +341,14 @@ namespace EZEngine::RHI
         createInfo.pQueueCreateInfos = queueCreateInfos.data();
         createInfo.pEnabledFeatures = &deviceFeatures;
 
-        const char* deviceExtensions[] = {
-            VK_KHR_SWAPCHAIN_EXTENSION_NAME
-        };
+        const char *deviceExtensions[] = {
+            VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
         createInfo.enabledExtensionCount = 1;
         createInfo.ppEnabledExtensionNames = deviceExtensions;
 
-        const char* validationLayers[] = {
-            "VK_LAYER_KHRONOS_validation"
-        };
+        const char *validationLayers[] = {
+            "VK_LAYER_KHRONOS_validation"};
 
         createInfo.enabledLayerCount = 1;
         createInfo.ppEnabledLayerNames = validationLayers;
