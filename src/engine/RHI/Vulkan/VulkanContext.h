@@ -19,7 +19,7 @@ namespace EZEngine::RHI
     class VulkanContext
     {
     public:
-        bool Initialize(EZEngine::Platform::GlfwWindow& window);
+        bool Initialize(EZEngine::Platform::GlfwWindow &window);
         void Shutdown();
 
         VkInstance GetInstance() const { return m_instance; }
@@ -29,23 +29,25 @@ namespace EZEngine::RHI
         QueueFamilyIndices GetQueueFamilyIndices() const { return m_queueFamilyIndices; }
         VkQueue GetGraphicsQueue() const { return m_graphicsQueue; }
         VkQueue GetPresentQueue() const { return m_presentQueue; }
-    
+
     private:
         bool CreateInstance();
         bool SetupDebugMessenger();
-        bool CreateSurface(EZEngine::Platform::GlfwWindow& window);
+        bool CreateSurface(EZEngine::Platform::GlfwWindow &window);
         bool EnumeratePhysicalDevices();
 
         bool PickPhysicalDevice();
         bool CreateLogicalDevice();
 
+        bool checkValidationLayerSupport(const std::vector<const char *> &validationLayers);
+
         QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-    
+
     private:
         VkInstance m_instance = VK_NULL_HANDLE;
         VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
         VkSurfaceKHR m_surface = VK_NULL_HANDLE;
-        VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE; 
+        VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
         std::vector<VkPhysicalDevice> m_physicalDevices;
         VkDevice m_logiclalDevice = VK_NULL_HANDLE;
 

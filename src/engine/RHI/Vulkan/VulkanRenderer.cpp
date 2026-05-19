@@ -32,12 +32,30 @@ namespace EZEngine::RHI
         if (!CreateRenderPass())
             return false;
 
+        if (!CreateFramebuffers())
+            return false;
+
         Log("Vulkan renderer initialized.", LogType::INFO);
         return true;
     }
 
     void VulkanRenderer::Shutdown()
     {
+        for (VkFramebuffer framebuffer : m_Framebuffers)
+        {
+            if (framebuffer != VK_NULL_HANDLE)
+            {
+                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+            }
+        }
+        m_Framebuffers.clear();
+
+        if (m_RenderPass != VK_NULL_HANDLE)
+        {
+            vkDestroyRenderPass(m_Device, m_RenderPass, nullptr);
+            m_RenderPass = VK_NULL_HANDLE;
+        }
+
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
             if (m_ImageAvailableSemaphores[i] != VK_NULL_HANDLE)
@@ -299,10 +317,26 @@ namespace EZEngine::RHI
     {
         vkDeviceWaitIdle(m_Device);
 
+        for (VkFramebuffer framebuffer : m_Framebuffers)
+        {
+            if (framebuffer != VK_NULL_HANDLE)
+            {
+                vkDestroyFramebuffer(m_Device, framebuffer, nullptr);
+            }
+        }
+        m_Framebuffers.clear();
+
         if (!m_Swapchain.RecreateSwapchain(m_Context, window))
         {
             throw std::runtime_error("Failed to recreate swapchain!");
         }
+
+        if (!CreateFramebuffers())
+        {
+            throw std::runtime_error("Failed to recreate framebuffers!");
+        }
+
+        m_ImagesInFlight.assign(m_Swapchain.GetImageCount(), VK_NULL_HANDLE);
 
         Log("Swapchain recreated.", LogType::INFO);
     }
@@ -382,6 +416,37 @@ namespace EZEngine::RHI
         }
 
         Log("Render pass created.", LogType::INFO);
+        return true;
+    }
+
+    bool VulkanRenderer::CreateFramebuffers()
+    {
+        const auto &imageViews = m_Swapchain.GetImageViews();
+        VkExtent2D extent = m_Swapchain.GetExtent();
+
+        m_Framebuffers.resize(imageViews.size());
+
+        for (size_t i = 0; i < imageViews.size(); i++)
+        {
+            VkImageView attachments[] = {imageViews[i]};
+
+            VkFramebufferCreateInfo framebufferInfo{};
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferInfo.renderPass = m_RenderPass;
+            framebufferInfo.attachmentCount = 1;
+            framebufferInfo.pAttachments = attachments;
+            framebufferInfo.width = extent.width;
+            framebufferInfo.height = extent.height;
+            framebufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(m_Device, &framebufferInfo, nullptr, &m_Framebuffers[i]) != VK_SUCCESS)
+            {
+                Log("Failed to create framebuffer.", LogType::ERROR);
+                return false;
+            }
+        }
+
+        Log("Framebuffers created: " + std::to_string(m_Framebuffers.size()), LogType::INFO);
         return true;
     }
 }

@@ -166,7 +166,7 @@ namespace EZEngine::RHI
         return true;
     }
 
-    bool checkValidationLayerSupport(const std::vector<const char *> &validationLayers)
+    bool VulkanContext::checkValidationLayerSupport(const std::vector<const char *> &validationLayers)
     {
         uint32_t layerCount = 0;
         vkEnumerateInstanceLayerProperties(&layerCount, nullptr);

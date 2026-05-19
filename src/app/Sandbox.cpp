@@ -17,7 +17,7 @@ int main()
     GlfwWindow window;
     if (!window.Create({}, &eventQueue))
         return 1;
-    
+
     EZEngine::RHI::VulkanContext vulkanContext;
     if (!vulkanContext.Initialize(window))
         return 1;
@@ -25,7 +25,7 @@ int main()
     EZEngine::RHI::VulkanSwapchain swapchain;
     if (!swapchain.Initialize(vulkanContext, window))
         return 1;
-    
+
     EZEngine::RHI::VulkanRenderer renderer(vulkanContext, swapchain);
     if (!renderer.Initialize())
         return 1;
@@ -40,10 +40,10 @@ int main()
         window.PollEvents();
         renderer.RenderFrame(window);
 
-        for(const auto& event : eventQueue.Drain())
+        for (const auto &event : eventQueue.Drain())
         {
-            std::visit([&](auto&& event)
-            {
+            std::visit([&](auto &&event)
+                       {
                 using T = std::decay_t<decltype(event)>;
                 if constexpr (std::is_same_v<T, WindowResizeEvent>)
                 {
@@ -52,8 +52,7 @@ int main()
                 else if constexpr (std::is_same_v<T, WindowCloseEvent>)
                 {
                     Log("Window close requested.", LogType::INFO);
-                }
-            }, event);
+                } }, event);
         }
 
         if (window.IsKeyDown(GLFW_KEY_ESCAPE))
